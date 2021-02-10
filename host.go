@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"github.com/smartcontractkit/chainlink/core/logger"
 
 	"github.com/brynbellomy/redwood/ctx"
 	"github.com/brynbellomy/redwood/tree"
@@ -18,6 +19,7 @@ type Host interface {
 	Ctx() *ctx.Context
 	Start() error
 
+	Peers() []PeerDetails
 	StateAtVersion(stateURI string, version *types.ID) (tree.Node, error)
 	Subscribe(ctx context.Context, stateURI string, subscriptionType SubscriptionType, keypath tree.Keypath) (ReadableSubscription, error)
 	Unsubscribe(stateURI string) error
@@ -152,6 +154,10 @@ func (h *host) Start() error {
 	)
 }
 
+func (h *host) Peers() []PeerDetails {
+	return h.peerStore.Peers()
+}
+
 func (h *host) Transport(name string) Transport {
 	return h.transports[name]
 }
@@ -176,6 +182,7 @@ func (h *host) ProvidersOfStateURI(ctx context.Context, stateURI string) <-chan 
 	for _, tpt := range h.transports {
 		innerCh, err := tpt.ProvidersOfStateURI(ctx, stateURI)
 		if err != nil {
+			logger.Warnf("error fetching providers of State-URI %v on transport %v: %v", stateURI, tpt.Name(), err)
 			continue
 		}
 
@@ -192,6 +199,7 @@ func (h *host) ProvidersOfStateURI(ctx context.Context, stateURI string) <-chan 
 					if !open {
 						return
 					}
+					log.Warnf("yeet %v", peer.DialInfo())
 
 					select {
 					case <-h.Ctx().Done():
@@ -539,6 +547,11 @@ func (h *host) subscribe(ctx context.Context, stateURI string) error {
 		h.config.Node.SubscribedStateURIs.Add(stateURI)
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+
+	_, err = h.Controllers().EnsureController(stateURI)
 	if err != nil {
 		return err
 	}
