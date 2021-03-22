@@ -75,6 +75,11 @@ func (app *appType) Start() (err error) {
 		return err
 	}
 
+	// Set profile data root
+	splitDataRoot := strings.Split(config.Node.DataRoot, "/")
+	splitDataRoot[2] = app.profileName
+	config.Node.DataRoot = strings.Join(splitDataRoot[:], "/")
+
 	if app.devMode {
 		config.Node.DevMode = true
 	}
@@ -99,8 +104,16 @@ func (app *appType) Start() (err error) {
 	)
 	app.keyStore = keyStore
 
-	err = app.keyStore.Unlock(app.password)
+	err = app.keyStore.Unlock(app.password, app.mnemonic)
 	if err != nil {
+		app.refStore.Close()
+		app.refStore = nil
+
+		app.txStore.Close()
+		app.txStore = nil
+
+		app.db.Close()
+		app.db = nil
 		return err
 	}
 
